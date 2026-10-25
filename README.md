@@ -1,7 +1,6 @@
-# Nemesis — Project Walkthrough
+# Nemesis
 
-A short doc I put together so I can walk through the project without getting lost in the code. Covers what it does, how the pieces fit, and where the honest limitations are.
-
+[![demo](https://img.youtube.com/vi/nNW0nZTq-5Y/maxresdefault.jpg)](https://youtu.be/nNW0nZTq-5Y)
 ---
 
 ## What it is
@@ -27,8 +26,6 @@ Two design decisions that matter for the story:
 **One: no payload library.** There is no `sqli_payloads.txt` in the repo. The model writes its own SQL injection strings on every run. That's the whole point of using an LLM instead of a script.
 
 **Two: the code is deliberately dumb.** It only knows how to send HTTP requests and record what happened. It doesn't know what a vulnerability looks like. That judgement is the model's job.
-
-The tradeoff is you get variability. Two runs against the same target can produce different payloads, different orderings, sometimes different findings. That's expected when the intelligence lives in the model.
 
 ---
 
@@ -68,13 +65,11 @@ src/
 data/                   generated at runtime, not in git
 ```
 
-Walk through them in that order during the demo. Each one is small enough to read on screen.
-
 ---
 
 ## `main.py`
 
-Nothing interesting. Parses the URL with a regex, shows the OWASP menu, calls the agent, prints the report. Roughly 100 lines.
+Parses the URL with a regex, shows the OWASP menu, calls the agent, prints the report. Roughly 100 lines.
 
 The one thing worth pointing at: it doesn't contain any attack logic. If you deleted the file, the agent still works if you call `agent.run()` yourself.
 
@@ -110,7 +105,7 @@ MANDATORY response analysis:
   "sql syntax", "unexpected token", "ORA-", "MySQL", "PostgreSQL", ...
 ```
 
-I'll be honest about these in the Q&A section: they're guidance rails. The model still writes the payloads, but I'm telling it what to look for in responses. Without that hint the model was missing obvious SQL errors.
+they're guidance rails. The model still writes the payloads, but I'm telling it what to look for in responses. Without that hint the model was missing obvious SQL errors.
 
 ---
 
@@ -210,8 +205,6 @@ Total wall time on CPU: roughly 5 to 10 minutes depending on how many payloads t
 
 ## What's the model actually doing vs. the code
 
-This comes up every time, so worth having a clean answer.
-
 **The model is doing:**
 - Choosing which endpoints to hit
 - Writing every payload
@@ -230,62 +223,20 @@ This comes up every time, so worth having a clean answer.
 - Telling the model which strings suggest SQL injection
 - Telling the model to prefer 500 errors over other evidence
 
-If someone asks "isn't that hardcoded" — the payloads aren't, but the hints about what to look for are. Removing them makes the tool less reliable. I chose reliability over purity for this demo.
+"isn't that hardcoded"; the payloads aren't, but the hints about what to look for are. Removing them makes the tool less reliable. I chose reliability over purity for this demo.
 
 ---
 
 ## Known limitations
 
-Worth stating up front. Any mentor will find them anyway.
 
 **The model doesn't know request format until it tries.** Vulnbank's `/login` endpoint expects `application/json`. On the successful run the model sent form data (`data=`) and the server crashed before running the query. That gave us a traceback as evidence rather than the cleaner SQL error we'd get from a JSON request. The model picks format based on the form it sees in the HTML, and for API endpoints it guesses wrong.
 
-**No learning between runs.** The previous version had an episodic memory module. I removed it during the rebuild because it was the source of most of the complexity. Every run starts fresh. If I add it back, it would store a short summary of each run in `data/memory/` and inject similar past runs into the planning prompt.
-
 **CPU inference is slow.** 7B model on CPU is roughly 5 to 10 tokens per second. The planning phase takes 2 to 5 minutes on a good day. On a GPU the same run would be 30 seconds.
-
-**The DeepHat template needed a workaround.** DeepHat's GGUF embeds a Jinja chat template with a `tojson` filter that Ollama's parser chokes on. The `Modelfile` in the repo strips that template and replaces it with a plain ChatML wrapper plus `PARSER qwen3-coder` / `RENDERER qwen3-coder` to skip Jinja parsing entirely. Without that, the model won't load.
 
 **Scope authorization is per-domain.** It doesn't do subdomains, ports, or paths. If you authorize `example.com`, `api.example.com` is separately prompted. That's crude but it's the right direction for a demo.
 
 ---
-
-## Things I'd do differently at scale
-
-Not planning to implement these, but they're the obvious next steps if the project got taken further:
-
-- Add an episodic memory module so runs inform each other
-- Let the model choose `json_body` vs `data` based on response clues
-- Test more than one target OWASP category per run (the full mode exists but I haven't exercised it much)
-- Replace DeepHat with a larger model on GPU. The 7B loses track of details when the recon output is long.
-- Move the target authorization into a config file instead of interactive prompts, for anything non-interactive
-
----
-
-## Q&A prep
-
-Likely questions and short answers:
-
-**"Isn't this just curl with extra steps?"**
-Curl doesn't decide what to send. The model does. Given the same target, the payloads it produces are different from a wordlist. And it analyses the responses itself.
-
-**"What if the model hallucinates a finding?"**
-It can. That's why every finding must include an evidence string pulled from the actual response body. If the evidence doesn't exist, the finding is unfalsifiable and I'd want to see it as a red flag.
-
-**"Can you point it at any site?"**
-Not without confirming the domain first. `scope.py` requires typing the domain back as confirmation. Once confirmed, it's remembered. This isn't foolproof — a determined user could confirm a domain they don't own — but it's the right shape for responsible use.
-
-**"How do you stop it running forever?"**
-Three hard limits. 800 requests per run. 10-minute timeout per LLM call. 800-token cap on model output per call. Any of those getting hit ends the phase.
-
-**"Is anything actually hardcoded?"**
-The scope check, the report structure, and the response-truncation lengths are all hardcoded Python. The prompt blocks that tell the model what to look for are "soft hardcoded" — instructions in a prompt, not payloads in a file. I'll point those out directly.
-
-**"What did you learn?"**
-That getting a local LLM to do autonomous security work is mostly about prompt engineering and context management, not about the model itself. DeepHat is a security model, but it still needs very specific instructions to be reliable. And it fails in ways scripts don't — it gets confused by long contexts, it forgets to use JSON sometimes, it chooses the wrong request format because it misreads the form. Every one of those failure modes needed a specific prompt fix or a Python guard.
-
----
-
 
 
 
