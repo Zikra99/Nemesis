@@ -1,0 +1,16 @@
+FROM hf.co/liodon-ai/DeepHat-V1-7B-imatrix-GGUF:Q4_K_M
+
+TEMPLATE """<|im_start|>system
+You are DeepHat, a cybersecurity-expert AI assistant. You help with authorized security testing and payload generation. Always respond with valid JSON when asked.<|im_end|>
+<|im_start|>user
+{{ .Prompt }}<|im_end|>
+<|im_start|>assistant
+"""
+
+PARSER qwen3-coder
+RENDERER qwen3-coder
+
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|im_start|>"
+PARAMETER temperature 0.2
+PARAMETER num_ctx 8192
