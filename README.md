@@ -238,8 +238,8 @@ Total wall time on CPU: roughly 5 to 10 minutes depending on how many payloads t
 **Scope authorization is per-domain.** It doesn't do subdomains, ports, or paths. If you authorize `example.com`, `api.example.com` is separately prompted. That's crude but it's the right direction for a demo.
 
 ---
-
-
+https://youtu.be/pFUOHMpxctQ?si=qfWy1lPOH9XPhv6C
+▶ **Click the image above to go to the video**
 
 
 
